@@ -7,35 +7,60 @@ from retrain import train_model_for_client
 MODEL_DIR = "models"
 app = Flask(__name__)
 
-
 @app.route('/')
 def home():
-    return "Cow Medicine API is running."
+    return "✅ Cow Medicine Prediction API is running."
 
 @app.route('/predict', methods=['POST'])
 def predict():
     client = request.args.get('client')
     if not client:
-        return jsonify({"error": "Client not specified"}), 400
+        return jsonify({"error": "Client not specified. Pass client as query param like ?client=client1"}), 400
 
-    client_model_path = os.path.join(MODEL_DIR, client, "model.pkl")
-    client_le_path = os.path.join(MODEL_DIR, client, "label_encoder.pkl")
-    client_feature_path = os.path.join(MODEL_DIR, client, "feature_columns.pkl")
+    model_path = os.path.join(MODEL_DIR, client, "model.pkl")
+    le_path = os.path.join(MODEL_DIR, client, "label_encoder.pkl")
+    feature_path = os.path.join(MODEL_DIR, client, "feature_columns.pkl")
 
-    if not all(os.path.exists(p) for p in [client_model_path, client_le_path, client_feature_path]):
-        return jsonify({"error": f"No trained model found for {client}"}), 400
+    if not all(os.path.exists(p) for p in [model_path, le_path, feature_path]):
+        return jsonify({"error": f"No trained model found for client: {client}. Please retrain first."}), 400
 
     try:
-        user_data = request.json
-        if not user_data or 'diagnosis' not in user_data or not user_data['diagnosis']:
-            return jsonify({"error": "Diagnosis field is mandatory in JSON payload."}), 400
-
         # Load model and encoders
-        model = joblib.load(client_model_path)
-        le = joblib.load(client_le_path)
-        feature_columns = joblib.load(client_feature_path)
+        model = joblib.load(model_path)
+        le = joblib.load(le_path)
+        feature_columns = joblib.load(feature_path)
 
-        user_df = pd.DataFrame([user_data])
+        # Read JSON input
+        user_data = request.json
+        if not user_data:
+            return jsonify({"error": "No JSON body provided."}), 400
+
+        # Expect diagnosis as a list
+        diagnoses_list = user_data.get('diagnosis')
+        if not diagnoses_list or not isinstance(diagnoses_list, list):
+            return jsonify({"error": "Field 'diagnosis' (as list) is mandatory in JSON payload."}), 400
+
+        # Prepare data rows for each diagnosis
+        inputs = {
+            "breed": user_data.get("breed", ""),
+            "num_calvings": user_data.get("num_calvings", ""),
+            "age": user_data.get("age", ""),
+            "months_pregnant": user_data.get("months_pregnant", ""),
+            "months_since_calving": user_data.get("months_since_calving", ""),
+            "avg_lpd": user_data.get("avg_lpd", "")
+        }
+
+        rows = []
+        for diag in diagnoses_list:
+            row = inputs.copy()
+            row["diagnosis"] = diag
+            rows.append(row)
+
+        user_df = pd.DataFrame(rows)
+
+        # Convert numeric fields
+        numeric_fields = ['num_calvings', 'age', 'months_pregnant', 'months_since_calving', 'avg_lpd']
+        user_df[numeric_fields] = user_df[numeric_fields].apply(pd.to_numeric, errors='coerce')
 
         # One-hot encode
         user_encoded = pd.get_dummies(user_df)
@@ -44,14 +69,20 @@ def predict():
                 user_encoded[col] = 0
         user_encoded = user_encoded[feature_columns]
 
-        probs = model.predict_proba(user_encoded)[0]
-        top_idx = probs.argsort()[-2:][::-1]
+        # Predict
+        probs = model.predict_proba(user_encoded)
+
+        # Sum probabilities for same medicine across multiple diagnoses
+        summed_probs = probs.sum(axis=0)
+        top_indices = summed_probs.argsort()[-5:][::-1]  # Top 5 medicines
 
         result = []
-        for idx in top_idx:
+        for idx in top_indices:
+            med = le.inverse_transform([idx])[0]
+            conf = float(summed_probs[idx] * 100)
             result.append({
-                "medicine": le.inverse_transform([idx])[0],
-                "confidence_percent": float(probs[idx] * 100)
+                "medicine": med,
+                "confidence_percent": round(conf, 1)
             })
 
         return jsonify({"predictions": result})
@@ -63,7 +94,7 @@ def predict():
 def retrain_client():
     client = request.args.get('client')
     if not client:
-        return jsonify({"error": "Client not specified"}), 400
+        return jsonify({"error": "Client not specified. Pass client as query param like ?client=client1"}), 400
     try:
         train_model_for_client(client)
         return jsonify({"status": f"Retraining complete for {client}"})
@@ -72,4 +103,3 @@ def retrain_client():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5020)
-

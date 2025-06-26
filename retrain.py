@@ -18,8 +18,10 @@ def train_model_for_client(client_name):
     print(f"✅ Training model for {client_name}...")
 
     try:
-        obs_df = pd.read_excel(excel_path, sheet_name="Observation to Diagnosis")
-        rx_df = pd.read_excel(excel_path, sheet_name="Diagnosis to Rx")
+        # obs_df = pd.read_excel(excel_path, sheet_name="Observation to Diagnosis")
+        # rx_df = pd.read_excel(excel_path, sheet_name="Diagnosis to Rx")
+        obs_df = pd.read_excel(excel_path, sheet_name="sheet1")
+        rx_df = pd.read_excel(excel_path, sheet_name="sheet2")
 
         # Filter bad rows
         obs_df = obs_df[~obs_df['care_calendar_id'].astype(str).str.contains("care_calendar_id", na=False)]

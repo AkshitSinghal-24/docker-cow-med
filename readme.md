@@ -128,12 +128,13 @@ Response:
 
 ### ✅ 3. Predict Medicines
 
-**POST** `/predict`
+**POST** `/predict?client=client_A`
 
 ✅ **Mandatory:**
 
 - Query Param: `client`
 - JSON Body Field: `diagnosis`
+- "diagnosis" (List of strings like ["Mastitis", "Metritis"])
 
 **Example cURL Request:**
 
@@ -141,14 +142,14 @@ Response:
 curl -X POST http://127.0.0.1:5020/predict?client=client_A \
   -H "Content-Type: application/json" \
   -d '{
-        "diagnosis": "Mastitis",
-        "breed": "Holstein",
-        "num_calvings": 2,
-        "age": 5,
-        "months_pregnant": 3,
-        "months_since_calving": 2,
-        "avg_lpd": 15.0
-      }'
+  "diagnosis": ["Mastitis", "Metritis"],
+  "breed": "Holstein",
+  "num_calvings": 2,
+  "age": 5,
+  "months_pregnant": 3,
+  "months_since_calving": 2,
+  "avg_lpd": 15.0
+}'
 ```
 
 ✅ **Minimum Working Example:**
@@ -156,7 +157,19 @@ curl -X POST http://127.0.0.1:5020/predict?client=client_A \
 ```bash
 curl -X POST http://127.0.0.1:5020/predict?client=client_A \
   -H "Content-Type: application/json" \
-  -d '{"diagnosis": "Mastitis"}'
+  -d '{"diagnosis": ["Mastitis"]}'
+```
+
+✅ **Response Format:**
+
+```{
+  "predictions": [
+    {"medicine": "PREDNISOLONE ACETATE INJ 10 ML", "confidence_percent": 38.1},
+    {"medicine": "CADISTIN INJ 100 ML", "confidence_percent": 32.3},
+    {"medicine": "ATN-MB INJ 100 ML", "confidence_percent": 9.6},
+    {"medicine": "25D 500ML", "confidence_percent": 6.3}
+  ]
+}
 ```
 
 ---

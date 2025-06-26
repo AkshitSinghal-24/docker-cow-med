@@ -26,11 +26,15 @@ def predict():
         return jsonify({"error": f"No trained model found for {client}"}), 400
 
     try:
+        user_data = request.json
+        if not user_data or 'diagnosis' not in user_data or not user_data['diagnosis']:
+            return jsonify({"error": "Diagnosis field is mandatory in JSON payload."}), 400
+
+        # Load model and encoders
         model = joblib.load(client_model_path)
         le = joblib.load(client_le_path)
         feature_columns = joblib.load(client_feature_path)
 
-        user_data = request.json
         user_df = pd.DataFrame([user_data])
 
         # One-hot encode
@@ -42,7 +46,6 @@ def predict():
 
         probs = model.predict_proba(user_encoded)[0]
         top_idx = probs.argsort()[-2:][::-1]
-        meds = le.inverse_transform(top_idx)
 
         result = []
         for idx in top_idx:
